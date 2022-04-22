@@ -71,7 +71,7 @@ type NvidiaDevicePlugin struct {
 
 // NewNvidiaDevicePlugin returns an initialized NvidiaDevicePlugin
 func NewNvidiaDevicePlugin(config *config.Config, resourceName string, resourceManager ResourceManager, deviceListEnvvar string, allocatePolicy gpuallocator.Policy, socket string, replicas uint) *NvidiaDevicePlugin {
-	return &NvidiaDevicePlugin{
+	return &NvidiaDevicePlugin{		
 		ResourceManager:  resourceManager,
 		config:           *config,
 		resourceName:     resourceName,
