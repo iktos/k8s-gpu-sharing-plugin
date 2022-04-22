@@ -18,9 +18,12 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
@@ -30,6 +33,11 @@ import (
 	altsrc "github.com/urfave/cli/v2/altsrc"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
+
+var resourceConfigFlag string
+
+// added for replica and renaming support
+var resourceConfig resourceConfiguration
 
 var version string // This should be set at build time to indicate the actual version
 
@@ -112,6 +120,13 @@ func main() {
 			Destination: &configFile,
 			EnvVars:     []string{"CONFIG_FILE"},
 		},
+		&cli.StringFlag{
+			Name:        "resource-config",
+			Value:       "",
+			Usage:       "Maps the resource name to a new name and number of replicas.  Syntax is <original>:<new>:<replicas>,...  e.g., 'gpu:sharedgpu:4,mig-3g.20gb:small:2'.  If a resource is not found in the list then the default is no replication with the same variant name.",
+			Destination: &resourceConfigFlag,
+			EnvVars:     []string{"NVIDIA_DRIVER_RESOURCE_CONFIG"},
+		},		
 	}
 
 	err := c.Run(os.Args)
@@ -130,6 +145,14 @@ func validateFlags(config *config.Config) error {
 	if config.Flags.DeviceIDStrategy != DeviceIDStrategyUUID && config.Flags.DeviceIDStrategy != DeviceIDStrategyIndex {
 		return fmt.Errorf("invalid --device-id-strategy option: %v", config.Flags.DeviceIDStrategy)
 	}
+
+	var err error
+	resourceConfig, err = parseResourceConfig(resourceConfigFlag)
+	if err != nil {
+		return fmt.Errorf("Invalid --resource-config option: '%s' %w", resourceConfigFlag, err)
+	}
+	log.Printf("Using variant config: %v", resourceConfig)
+
 	return nil
 }
 
@@ -143,6 +166,33 @@ func setup(c *cli.Context, flags []cli.Flag) (*config.Config, error) {
 		return nil, fmt.Errorf("unable to validate flags: %v", err)
 	}
 	return config, nil
+}
+
+func parseResourceConfig(config string) (resourceConfiguration, error) {
+	//parse resource config
+	resourceConfig := resourceConfiguration{}
+	for _, entry := range strings.Split(config, ",") {
+		entry = strings.TrimSpace(entry)
+		if len(entry) == 0 {
+			continue
+		}
+		parts := strings.Split(entry, ":")
+		if len(parts) != 3 {
+			return nil, errors.New("an entry must have three parts separated by a semicolon")
+		}
+		origName := parts[0]
+		newName := parts[1]
+		replicas, err := strconv.ParseUint(parts[2], 10, 32)
+		if err != nil {
+			return nil, errors.New("replica must be an integer")
+		}
+		resourceConfig[origName] = variant{
+			Name:     newName,
+			Replicas: uint(replicas),
+		}
+	}
+
+	return resourceConfig, nil
 }
 
 func start(c *cli.Context, config *config.Config) error {
@@ -186,7 +236,7 @@ restart:
 	}
 
 	log.Println("Retreiving plugins.")
-	migStrategy, err := NewMigStrategy(config)
+	migStrategy, err := NewMigStrategy(config, resourceConfig)
 	if err != nil {
 		return fmt.Errorf("error creating MIG strategy: %v", err)
 	}
