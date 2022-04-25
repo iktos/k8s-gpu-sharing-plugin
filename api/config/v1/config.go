@@ -19,7 +19,6 @@ package v1
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 
 	cli "github.com/urfave/cli/v2"
@@ -72,7 +71,7 @@ func parseConfigFrom(reader io.Reader) (*Config, error) {
 	var err error
 	var configYaml []byte
 
-	configYaml, err = ioutil.ReadAll(reader)
+	configYaml, err = io.ReadAll(reader)
 	if err != nil {
 		return nil, fmt.Errorf("read error: %v", err)
 	}
