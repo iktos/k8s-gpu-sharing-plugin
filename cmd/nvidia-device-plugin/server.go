@@ -61,6 +61,7 @@ type NvidiaDevicePlugin struct {
 	allocatePolicy   gpuallocator.Policy
 	socket           string
 	replicas         uint
+	autoReplicas     bool
 
 	server        *grpc.Server
 	cachedDevices  []*Device // raw devices
@@ -70,7 +71,7 @@ type NvidiaDevicePlugin struct {
 }
 
 // NewNvidiaDevicePlugin returns an initialized NvidiaDevicePlugin
-func NewNvidiaDevicePlugin(config *config.Config, resourceName string, resourceManager ResourceManager, deviceListEnvvar string, allocatePolicy gpuallocator.Policy, socket string, replicas uint) *NvidiaDevicePlugin {
+func NewNvidiaDevicePlugin(config *config.Config, resourceName string, resourceManager ResourceManager, deviceListEnvvar string, allocatePolicy gpuallocator.Policy, socket string, replicas uint, autoReplicas bool) *NvidiaDevicePlugin {
 	return &NvidiaDevicePlugin{		
 		ResourceManager:  resourceManager,
 		config:           *config,
@@ -79,6 +80,7 @@ func NewNvidiaDevicePlugin(config *config.Config, resourceName string, resourceM
 		allocatePolicy:   allocatePolicy,
 		socket:           socket,
 		replicas:         replicas,
+		autoReplicas:     autoReplicas,
 
 		// These will be reinitialized every
 		// time the plugin server is restarted.
@@ -94,7 +96,14 @@ func (m *NvidiaDevicePlugin) initialize() {
 	m.cachedDevices = m.Devices()
 
 	for _, dev := range m.cachedDevices {
-		for i := uint(0); i < m.replicas; i++ {
+		replicas := m.replicas
+		if m.autoReplicas {
+			// Dividing the total memory to avoid reaching a limit of about 64K devices
+			replicas = uint(dev.TotalMemory / 1000)
+		}
+
+		log.Printf("Replicating device %v %v times", *dev, replicas)
+		for i := uint(0); i < replicas; i++ {
 			replicatedDev := *dev // This is replicating the Device struct
 			replicatedDev.ID = fmt.Sprintf("%s%s%d", dev.ID, joinStr, i)
 			m.deviceReplicas = append(m.deviceReplicas, &replicatedDev)
@@ -219,7 +228,7 @@ func (m *NvidiaDevicePlugin) Register() error {
 		Endpoint:     path.Base(m.socket),
 		ResourceName: m.resourceName,
 		Options: &pluginapi.DevicePluginOptions{
-			GetPreferredAllocationAvailable: (m.allocatePolicy != nil || m.replicas > 1),
+			GetPreferredAllocationAvailable: (m.allocatePolicy != nil || m.replicas > 1 || m.autoReplicas),
 		},
 	}
 
@@ -233,7 +242,7 @@ func (m *NvidiaDevicePlugin) Register() error {
 // GetDevicePluginOptions returns the values of the optional settings for this plugin
 func (m *NvidiaDevicePlugin) GetDevicePluginOptions(context.Context, *pluginapi.Empty) (*pluginapi.DevicePluginOptions, error) {
 	options := &pluginapi.DevicePluginOptions{
-		GetPreferredAllocationAvailable: (m.allocatePolicy != nil || m.replicas > 1),
+		GetPreferredAllocationAvailable: (m.allocatePolicy != nil || m.replicas > 1 || m.autoReplicas),
 	}
 	return options, nil
 }
@@ -273,7 +282,7 @@ func (m *NvidiaDevicePlugin) GetPreferredAllocation(ctx context.Context, r *plug
 		}
 
 		var deviceIds []string
-		if m.replicas > 1 {
+		if m.replicas > 1 || m.autoReplicas {
 			ids, err := prioritizeDevices(req.AvailableDeviceIDs, req.MustIncludeDeviceIDs, int(req.AllocationSize))
 			if err != nil {
 				var nonUnique *NonUniqueError

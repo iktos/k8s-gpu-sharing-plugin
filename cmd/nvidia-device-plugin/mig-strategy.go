@@ -58,6 +58,7 @@ func NewMigStrategy(config *config.Config, resourceConfig resourceConfiguration)
 type variant struct {
 	Name     string
 	Replicas uint
+	AutoReplicas bool
 }
 
 type resourceConfiguration map[string]variant
@@ -70,6 +71,7 @@ func (v *resourceConfiguration) Get(name string) variant {
 	return variant{
 		Name:     name,
 		Replicas: 0,
+		AutoReplicas: false,
 	}
 }
 
@@ -100,7 +102,7 @@ func (s *migStrategyNone) GetPlugins() []*NvidiaDevicePlugin {
 			"NVIDIA_VISIBLE_DEVICES",
 			gpuallocator.NewBestEffortPolicy(),
 			pluginapi.DevicePluginPath+"nvidia-gpu.sock",
-			rc.Replicas),
+			rc.Replicas, rc.AutoReplicas),
 	}
 }
 
@@ -167,7 +169,7 @@ func (s *migStrategySingle) GetPlugins() []*NvidiaDevicePlugin {
 			"NVIDIA_VISIBLE_DEVICES",
 			gpuallocator.Policy(nil),
 			pluginapi.DevicePluginPath+"nvidia-gpu.sock",
-			rc.Replicas),
+			rc.Replicas, rc.AutoReplicas),
 	}
 }
 
@@ -231,7 +233,7 @@ func (s *migStrategyMixed) GetPlugins() []*NvidiaDevicePlugin {
 			"NVIDIA_VISIBLE_DEVICES",
 			gpuallocator.NewBestEffortPolicy(),
 			pluginapi.DevicePluginPath+"nvidia-gpu.sock",
-			rc.Replicas),
+			rc.Replicas, rc.AutoReplicas),
 	}
 
 	for resource := range resources {
@@ -243,7 +245,7 @@ func (s *migStrategyMixed) GetPlugins() []*NvidiaDevicePlugin {
 			"NVIDIA_VISIBLE_DEVICES",
 			gpuallocator.Policy(nil),
 			pluginapi.DevicePluginPath+"nvidia-"+resource+".sock",
-			rc.Replicas)
+			rc.Replicas, rc.AutoReplicas)
 		plugins = append(plugins, plugin)
 	}
 

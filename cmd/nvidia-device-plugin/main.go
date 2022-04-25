@@ -182,13 +182,20 @@ func parseResourceConfig(config string) (resourceConfiguration, error) {
 		}
 		origName := parts[0]
 		newName := parts[1]
-		replicas, err := strconv.ParseUint(parts[2], 10, 32)
+		replicas, err := strconv.ParseInt(parts[2], 10, 32)
 		if err != nil {
 			return nil, errors.New("replica must be an integer")
 		}
+		autoReplicas := false
+		if replicas == -1 {
+			autoReplicas = true
+			replicas = 1
+		}
+
 		resourceConfig[origName] = variant{
-			Name:     newName,
-			Replicas: uint(replicas),
+			Name:            newName,
+			Replicas:        uint(replicas),
+			AutoReplicas:    autoReplicas,
 		}
 	}
 
@@ -201,6 +208,13 @@ func start(c *cli.Context, config *config.Config) error {
 		return fmt.Errorf("failed to marshal config to JSON: %v", err)
 	}
 	log.Printf("\nRunning with config:\n%v", string(configJSON))
+
+	resourceConfigJSON, err := json.MarshalIndent(resourceConfig, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config to JSON: %v", err)
+	}
+
+	log.Printf("\nRunning with resource config:\n%v", string(resourceConfigJSON))
 
 	log.Println("Loading NVML")
 	if err := nvml.Init(); err != nil {
