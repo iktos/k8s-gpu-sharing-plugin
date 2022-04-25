@@ -10,7 +10,7 @@ nvidiaDriverRoot: "/"
 # For example, to share regular gpus with 4 pods and to share mig-3g.20gb GPUs with 2 pods and rename to small.
 # resourceConfig: gpu:sharedgpu:4,mig-3g.20gb:small:2
 # The pod would then request a shared mig gpu by specifying a resource of "nvidia.com/small: 1"
-resourceConfig: ""
+resourceConfig: gpu:gpu-mem-gb:-1
 
 nameOverride: ""
 fullnameOverride: ""
@@ -20,10 +20,10 @@ namespace: kube-system
 
 imagePullSecrets: []
 image:
-  repository: nvcr.io/nvidia/k8s-device-plugin
-  pullPolicy: IfNotPresent
+  repository: aelgasser/k8s-gpu-share-plugin
+  pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+  tag: "devel"
 
 updateStrategy:
   type: RollingUpdate
@@ -32,7 +32,8 @@ podSecurityContext: {}
 securityContext: {}
 
 resources: {}
-nodeSelector: {}
+nodeSelector:
+  gpushare: "true"
 affinity: {}
 tolerations:
   # This toleration is deprecated. Kept here for backward compatibility
