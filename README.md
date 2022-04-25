@@ -15,10 +15,10 @@
 - [Versioning](#versioning)
 - [Upgrading Kubernetes with the Device Plugin](#upgrading-kubernetes-with-the-device-plugin)
 
-
 ## About
 
 The NVIDIA device plugin for Kubernetes is a Daemonset that allows you to automatically:
+
 - Expose the number of GPUs on each nodes of your cluster
 - Keep track of the health of your GPUs
 - Run GPU enabled containers in your Kubernetes cluster.
@@ -26,21 +26,23 @@ The NVIDIA device plugin for Kubernetes is a Daemonset that allows you to automa
 This repository contains NVIDIA's official implementation of the [Kubernetes device plugin](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/resource-management/device-plugin.md).
 
 Please note that:
+
 - The NVIDIA device plugin API is beta as of Kubernetes v1.10.
 - The NVIDIA device plugin is still considered beta and is missing
-    - More comprehensive GPU health checking features
-    - GPU cleanup features
-    - ...
+  - More comprehensive GPU health checking features
+  - GPU cleanup features
+  - ...
 - Support will only be provided for the official NVIDIA device plugin (and not
   for forks or other variants of this plugin).
 
 ## Prerequisites
 
 The list of prerequisites for running the NVIDIA device plugin is described below:
-* NVIDIA drivers ~= 384.81
-* nvidia-docker version > 2.0 (see how to [install](https://github.com/NVIDIA/nvidia-docker) and it's [prerequisites](https://github.com/nvidia/nvidia-docker/wiki/Installation-\(version-2.0\)#prerequisites))
-* docker configured with nvidia as the [default runtime](https://github.com/NVIDIA/nvidia-docker/wiki/Advanced-topics#default-runtime).
-* Kubernetes version >= 1.10
+
+- NVIDIA drivers ~= 384.81
+- nvidia-docker version > 2.0 (see how to [install](https://github.com/NVIDIA/nvidia-docker) and it's [prerequisites](<https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0)#prerequisites>))
+- docker configured with nvidia as the [default runtime](https://github.com/NVIDIA/nvidia-docker/wiki/Advanced-topics#default-runtime).
+- Kubernetes version >= 1.10
 
 ## Quick Start
 
@@ -51,6 +53,7 @@ This README assumes that the NVIDIA drivers and `nvidia-docker` have been instal
 
 Note that you need to install the `nvidia-docker2` package and not the `nvidia-container-toolkit`.
 This is because the new `--gpus` options hasn't reached kubernetes yet. Example:
+
 ```bash
 # Add the package repositories
 $ distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
@@ -63,18 +66,20 @@ $ sudo systemctl restart docker
 
 You will need to enable the nvidia runtime as your default runtime on your node.
 We will be editing the docker daemon config file which is usually present at `/etc/docker/daemon.json`:
+
 ```json
 {
-    "default-runtime": "nvidia",
-    "runtimes": {
-        "nvidia": {
-            "path": "/usr/bin/nvidia-container-runtime",
-            "runtimeArgs": []
-        }
+  "default-runtime": "nvidia",
+  "runtimes": {
+    "nvidia": {
+      "path": "/usr/bin/nvidia-container-runtime",
+      "runtimeArgs": []
     }
+  }
 }
 ```
-> *if `runtimes` is not already present, head to the install page of [nvidia-docker](https://github.com/NVIDIA/nvidia-docker)*
+
+> _if `runtimes` is not already present, head to the install page of [nvidia-docker](https://github.com/NVIDIA/nvidia-docker)_
 
 ### Enabling GPU Support in Kubernetes
 
@@ -114,8 +119,8 @@ spec:
           nvidia.com/gpu: 2 # requesting 2 GPUs
 ```
 
-> **WARNING:** *if you don't request GPUs when using the device plugin with NVIDIA images all
-> the GPUs on the machine will be exposed inside your container.*
+> **WARNING:** _if you don't request GPUs when using the device plugin with NVIDIA images all
+> the GPUs on the machine will be exposed inside your container._
 
 ## Deployment via `helm`
 
@@ -149,6 +154,8 @@ a number of customizable values. The most commonly overridden ones are:
       the root path for the NVIDIA driver installation (typical values are '/' or '/run/nvidia/driver')
   runtimeClassName:
       the runtimeClassName to use, for use with clusters that have multiple runtimes. (typical value is 'nvidia')
+  resourceConfig:
+      This is used to specify renaming of resources and replicas (for enabling sharing of GPUs)
 ```
 
 When set to true, the `failOnInitError` flag fails the plugin if an error is
@@ -158,13 +165,13 @@ indefinitely follows legacy semantics that allow the plugin to deploy
 successfully on nodes that don't have GPUs on them (and aren't supposed to have
 GPUs on them) without throwing an error. In this way, you can blindly deploy a
 daemonset with the plugin on all nodes in your cluster, whether they have GPUs
-on them or not, without encountering an error.  However, doing so means that
+on them or not, without encountering an error. However, doing so means that
 there is no way to detect an actual error on nodes that are supposed to have
 GPUs on them. Failing if an initilization error is encountered is now the
 default and should be adopted by all new deployments.
 
 The `compatWithCPUManager` flag configures the daemonset to be able to
-interoperate with the static `CPUManager` of the `kubelet`.  Setting this flag
+interoperate with the static `CPUManager` of the `kubelet`. Setting this flag
 requires one to deploy the daemonset with elevated privileges, so only do so if
 you know you need to interoperate with the `CPUManager`.
 
@@ -204,10 +211,17 @@ Passing the index may be desirable in situations where pods that have been
 allocated GPUs by the plugin get restarted with different physical GPUs
 attached to them.
 
+The `resourceConfig` flag can allows you to map mig or regular GPUs names to different names.  
+It also allows for replicating the GPUs as presented to the device plugin API so that a GPU can be effectively shared among multiple pods.
+The format for this field is "[<name>:<new-name>:<replicas>][,<name>:<new-name>:<replicas>]". For example, "gpu:sharedgpu:4" will share regular GPUs with a maximum of 4 pods and rename the resource to nvidia.com/sharedgpu. A pod would then request a shared gpu by specifying a resource of `nvidia.com/sharedgpu: 1`.
+You can also share a MIG GPU. For example "mig-3g.20gb:small:2" would rename mig-3g.20gb to "small" and share it to at most two pods.
+This renaming can also be used to convert mig devices into regular gpu devices for use by pods as nvidia.com/gpu, such as "mig-3g.20gb:gpu:1".
+When requesting replicated (shared) GPUs for a pod you may request more than one. For example, `nvidia.com/sharedgpu: 2` will get mapped to a node that has two replica GPUs available. If that node has two physical GPUs available (not hitting its max limit) then two physical GPUs will be available to the pod. If the only available replicas are on the same physical GPU then the pod will only have one GPU available eventhough it requested two shared GPUs. The plugin futher attempts to select the physical GPU that is the leasted shared to spread the load. This results in no actual GPU sharing by pods until the node is oversubscribed. See the [shared gpu tutorial](./SHARED_GPU_TUTORIAL.md) for more information.
+
 Please take a look in the following `values.yaml` file to see the full set of
 overridable parameters for the device plugin.
 
-* https://github.com/NVIDIA/k8s-device-plugin/blob/v0.11.0/deployments/helm/nvidia-device-plugin/values.yaml
+- https://github.com/NVIDIA/k8s-device-plugin/blob/v0.11.0/deployments/helm/nvidia-device-plugin/values.yaml
 
 #### Installing via `helm install`from the `nvidia-device-plugin` `helm` repository
 
@@ -215,6 +229,7 @@ The preferred method of deployment is with `helm install` via the
 `nvidia-device-plugin` `helm` repository.
 
 This repository can be installed as follows:
+
 ```shell
 $ helm repo add nvdp https://nvidia.github.io/k8s-device-plugin
 $ helm repo update
@@ -228,6 +243,7 @@ plugin with the various flags from above.
 `--devel` flag to `helm search repo` in order to see this release listed.
 
 Using the default values for the flags:
+
 ```shell
 $ helm install \
     --version=0.11.0 \
@@ -237,6 +253,7 @@ $ helm install \
 
 Enabling compatibility with the `CPUManager` and running with a request for
 100ms of CPU time and a limit of 512MB of memory.
+
 ```shell
 $ helm install \
     --version=0.11.0 \
@@ -248,6 +265,7 @@ $ helm install \
 ```
 
 Use the legacy Daemonset API (only available on Kubernetes < `v1.16`):
+
 ```shell
 $ helm install \
     --version=0.11.0 \
@@ -257,6 +275,7 @@ $ helm install \
 ```
 
 Enabling compatibility with the `CPUManager` and the `mixed` `migStrategy`
+
 ```shell
 $ helm install \
     --version=0.11.0 \
@@ -274,6 +293,7 @@ The examples below install the same daemonsets as the method above, except that
 they use direct URLs to the `helm` package instead of the `helm` repo.
 
 Using the default values for the flags:
+
 ```shell
 $ helm install \
     --generate-name \
@@ -282,6 +302,7 @@ $ helm install \
 
 Enabling compatibility with the `CPUManager` and running with a request for
 100ms of CPU time and a limit of 512MB of memory.
+
 ```shell
 $ helm install \
     --generate-name \
@@ -292,6 +313,7 @@ $ helm install \
 ```
 
 Use the legacy Daemonset API (only available on Kubernetes < `v1.16`):
+
 ```shell
 $ helm install \
     --generate-name \
@@ -300,6 +322,7 @@ $ helm install \
 ```
 
 Enabling compatibility with the `CPUManager` and the `mixed` `migStrategy`
+
 ```shell
 $ helm install \
     --generate-name \
@@ -318,13 +341,16 @@ easily be modified to work with any available tag or branch.
 ### With Docker
 
 #### Build
+
 Option 1, pull the prebuilt image from [Docker Hub](https://hub.docker.com/r/nvidia/k8s-device-plugin):
+
 ```shell
 $ docker pull nvcr.io/nvidia/k8s-device-plugin:v0.11.0
 $ docker tag nvcr.io/nvidia/k8s-device-plugin:v0.11.0 nvcr.io/nvidia/k8s-device-plugin:devel
 ```
 
 Option 2, build without cloning the repository:
+
 ```shell
 $ docker build \
     -t nvcr.io/nvidia/k8s-device-plugin:devel \
@@ -333,6 +359,7 @@ $ docker build \
 ```
 
 Option 3, if you want to modify the code:
+
 ```shell
 $ git clone https://github.com/NVIDIA/k8s-device-plugin.git && cd k8s-device-plugin
 $ docker build \
@@ -342,7 +369,9 @@ $ docker build \
 ```
 
 #### Run
+
 Without compatibility for the `CPUManager` static policy:
+
 ```shell
 $ docker run \
     -it \
@@ -354,6 +383,7 @@ $ docker run \
 ```
 
 With compatibility for the `CPUManager` static policy:
+
 ```shell
 $ docker run \
     -it \
@@ -366,17 +396,21 @@ $ docker run \
 ### Without Docker
 
 #### Build
+
 ```shell
 $ C_INCLUDE_PATH=/usr/local/cuda/include LIBRARY_PATH=/usr/local/cuda/lib64 go build
 ```
 
 #### Run
+
 Without compatibility for the `CPUManager` static policy:
+
 ```shell
 $ ./k8s-device-plugin
 ```
 
 With compatibility for the `CPUManager` static policy:
+
 ```shell
 $ ./k8s-device-plugin --pass-device-specs
 ```
@@ -391,6 +425,7 @@ $ ./k8s-device-plugin --pass-device-specs
 - Build multiarch container images for linux/amd64 and linux/arm64
 - Use Ubuntu 20.04 for Ubuntu-based container images
 - Remove Centos7 images
+
 ### Version v0.9.0
 
 - Fix bug when using CPUManager and the device plugin MIG mode not set to "none"
@@ -491,7 +526,7 @@ $ ./k8s-device-plugin --pass-device-specs
 - Refactor device plugin to eventually handle multiple resource types
 - Move plugin error retry to event loop so we can exit with a signal
 - Update all vendored dependencies to their latest versions
-- Fix bug that was inadvertently *always* disabling health checks
+- Fix bug that was inadvertently _always_ disabling health checks
 - Update minimal driver version to 384.81
 
 ### Version v0.4.0
@@ -529,10 +564,11 @@ $ ./k8s-device-plugin --pass-device-specs
 - Error messages were added
 
 # Issues and Contributing
+
 [Checkout the Contributing document!](CONTRIBUTING.md)
 
-* You can report a bug by [filing a new issue](https://github.com/NVIDIA/k8s-device-plugin/issues/new)
-* You can contribute by opening a [pull request](https://help.github.com/articles/using-pull-requests/)
+- You can report a bug by [filing a new issue](https://github.com/NVIDIA/k8s-device-plugin/issues/new)
+- You can contribute by opening a [pull request](https://help.github.com/articles/using-pull-requests/)
 
 ## Versioning
 
@@ -552,14 +588,14 @@ following a change in the device plugin API itself. For example, version
 device plugin. If a new `v2beta2` version of the device plugin API comes out,
 then the device plugin will increase its major version to `1.x.x`.
 
-As of now, the device plugin API for Kubernetes >= v1.10 is `v1beta1`.  If you
+As of now, the device plugin API for Kubernetes >= v1.10 is `v1beta1`. If you
 have a version of Kubernetes >= 1.10 you can deploy any device plugin version >
 `v0.0.0`.
 
 ## Upgrading Kubernetes with the Device Plugin
 
 Upgrading Kubernetes when you have a device plugin deployed doesn't require you
-to do any, particular changes to your workflow.  The API is versioned and is
+to do any, particular changes to your workflow. The API is versioned and is
 pretty stable (though it is not guaranteed to be non breaking). Starting with
 Kubernetes version 1.10, you can use `v0.3.0` of the device plugin to perform
 upgrades, and Kubernetes won't require you to deploy a different version of the
