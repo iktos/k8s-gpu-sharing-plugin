@@ -56,8 +56,8 @@ func NewMigStrategy(config *config.Config, resourceConfig resourceConfiguration)
 }
 
 type variant struct {
-	Name     string
-	Replicas uint
+	Name         string
+	Replicas     uint
 	AutoReplicas bool
 }
 
@@ -69,24 +69,24 @@ func (v *resourceConfiguration) Get(name string) variant {
 		return x
 	}
 	return variant{
-		Name:     name,
-		Replicas: 0,
+		Name:         name,
+		Replicas:     0,
 		AutoReplicas: false,
 	}
 }
 
-type migStrategyNone struct{ 
-	config *config.Config 
+type migStrategyNone struct {
+	config         *config.Config
 	ResourceConfig resourceConfiguration
 }
 
-type migStrategySingle struct{ 
-	config *config.Config 
+type migStrategySingle struct {
+	config         *config.Config
 	ResourceConfig resourceConfiguration
 }
 
-type migStrategyMixed struct{ 
-	config *config.Config 
+type migStrategyMixed struct {
+	config         *config.Config
 	ResourceConfig resourceConfiguration
 }
 

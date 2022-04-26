@@ -40,8 +40,8 @@ const (
 // Device couples an underlying pluginapi.Device type with its device node paths
 type Device struct {
 	pluginapi.Device
-	Paths []string
-	Index string
+	Paths       []string
+	Index       string
 	TotalMemory uint
 }
 

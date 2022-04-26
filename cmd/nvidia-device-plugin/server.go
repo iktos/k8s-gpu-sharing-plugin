@@ -63,16 +63,16 @@ type NvidiaDevicePlugin struct {
 	replicas         uint
 	autoReplicas     bool
 
-	server        *grpc.Server
+	server         *grpc.Server
 	cachedDevices  []*Device // raw devices
 	deviceReplicas []*Device // devices presented to k8s that include the replicas
-	health        chan *Device
-	stop          chan interface{}
+	health         chan *Device
+	stop           chan interface{}
 }
 
 // NewNvidiaDevicePlugin returns an initialized NvidiaDevicePlugin
 func NewNvidiaDevicePlugin(config *config.Config, resourceName string, resourceManager ResourceManager, deviceListEnvvar string, allocatePolicy gpuallocator.Policy, socket string, replicas uint, autoReplicas bool) *NvidiaDevicePlugin {
-	return &NvidiaDevicePlugin{		
+	return &NvidiaDevicePlugin{
 		ResourceManager:  resourceManager,
 		config:           *config,
 		resourceName:     resourceName,
@@ -84,11 +84,11 @@ func NewNvidiaDevicePlugin(config *config.Config, resourceName string, resourceM
 
 		// These will be reinitialized every
 		// time the plugin server is restarted.
-		cachedDevices: nil,
+		cachedDevices:  nil,
 		deviceReplicas: nil,
-		server:        nil,
-		health:        nil,
-		stop:          nil,
+		server:         nil,
+		health:         nil,
+		stop:           nil,
 	}
 }
 
@@ -325,7 +325,7 @@ func (m *NvidiaDevicePlugin) Allocate(ctx context.Context, reqs *pluginapi.Alloc
 		uuids := stripReplicas(req.DevicesIDs)
 		log.Printf("kubelet is requesting devices %s, but using raw devices %s", req.DevicesIDs, uuids)
 
-		for _, id := range uuids {			
+		for _, id := range uuids {
 			if !m.deviceExists(id) {
 				return nil, fmt.Errorf("invalid allocation request for '%s': unknown device: %s", m.resourceName, id)
 			}

@@ -126,7 +126,7 @@ func main() {
 			Usage:       "Maps the resource name to a new name and number of replicas.  Syntax is <original>:<new>:<replicas>,...  e.g., 'gpu:sharedgpu:4,mig-3g.20gb:small:2'.  If a resource is not found in the list then the default is no replication with the same variant name.",
 			Destination: &resourceConfigFlag,
 			EnvVars:     []string{"NVIDIA_DRIVER_RESOURCE_CONFIG"},
-		},		
+		},
 	}
 
 	err := c.Run(os.Args)
@@ -193,9 +193,9 @@ func parseResourceConfig(config string) (resourceConfiguration, error) {
 		}
 
 		resourceConfig[origName] = variant{
-			Name:            newName,
-			Replicas:        uint(replicas),
-			AutoReplicas:    autoReplicas,
+			Name:         newName,
+			Replicas:     uint(replicas),
+			AutoReplicas: autoReplicas,
 		}
 	}
 
