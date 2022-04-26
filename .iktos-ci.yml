@@ -1,0 +1,70 @@
+stages:
+  - build
+  # - test
+  - release
+
+variables:
+  CONTAINER_TEST_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+  CONTAINER_RELEASE_IMAGE: $CI_REGISTRY_IMAGE:latest
+  CONTAINER_RELEASE_IMAGE_TAGGED: $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG
+
+before_script:
+  - echo "$CI_JOB_TOKEN" | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY || true
+
+.docker-in-docker:
+  tags:
+    - docker-in-docker
+
+build:
+  stage: build
+  extends: .docker-in-docker
+  services:
+    - docker:18-dind
+  only:
+    refs:
+      - merge_requests
+      - master
+      - tags
+  script:
+    - docker build --pull --force-rm -t $CONTAINER_TEST_IMAGE .
+    - docker push $CONTAINER_TEST_IMAGE
+
+# TODO Add tests
+# test:
+#   stage: test
+#   extends: .docker-in-docker
+#   services:
+#     - docker:18-dind
+#   only:
+#     refs:
+#       - merge_requests
+#       - master
+#   script:
+#     - docker pull $CONTAINER_TEST_IMAGE
+#     - echo "TODO Add tests"
+
+# release-image:
+#   stage: release
+#   extends: .docker-in-docker
+#   services:
+#     - docker:18-dind
+#   only:
+#     - master
+#   script:
+#     - docker pull $CONTAINER_TEST_IMAGE
+#     - docker tag $CONTAINER_TEST_IMAGE $CONTAINER_RELEASE_IMAGE
+#     - docker push $CONTAINER_RELEASE_IMAGE
+
+release-image-tag:
+  stage: release
+  extends: .docker-in-docker
+  services:
+    - docker:18-dind
+  only:
+    - tags
+  script:
+    - docker pull $CONTAINER_TEST_IMAGE
+    - docker tag $CONTAINER_TEST_IMAGE $CONTAINER_RELEASE_IMAGE_TAGGED
+    - docker push $CONTAINER_RELEASE_IMAGE_TAGGED
+    - docker tag $CONTAINER_TEST_IMAGE $CONTAINER_RELEASE_IMAGE
+    - docker push $CONTAINER_RELEASE_IMAGE
