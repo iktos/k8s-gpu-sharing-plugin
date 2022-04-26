@@ -26,7 +26,7 @@ build:
       - master
       - tags
   script:
-    - docker build --pull --force-rm -t $CONTAINER_TEST_IMAGE .
+    - docker build --pull --force-rm -t $CONTAINER_TEST_IMAGE -f deployments/container/Dockerfile.ubuntu .
     - docker push $CONTAINER_TEST_IMAGE
 
 # TODO Add tests
